@@ -1,0 +1,181 @@
+/* ==== GLOBAL RESET ==== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Fira Code', 'JetBrains Mono', 'Source Code Pro', monospace;
+  background-color: #0d0d0d;
+  color: #ffffff; 
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+/* ==== MAIN CONTAINER ==== */
+.app-container {
+  width: 100%;
+  max-width: 760px;
+  background-color: #161616;
+  border: 1px solid #000000;
+  border-radius: 10px;
+  padding: 20px;
+  transition: all 0.3s ease-in-out;
+}
+
+.app-container h2 {
+  text-align: center;
+  color: #ffffff; 
+  margin-bottom: 16px;
+  font-size: 1.5rem;
+  letter-spacing: 0.8px;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+/* ==== FORM SECTION ==== */
+.section {
+  border: 1px solid #7a00ff; /* purple border */
+  padding: 15px;
+  border-radius: 8px;
+  background-color: #1f1f1f;
+  box-shadow: inset 0 0 8px rgba(122, 0, 255, 0.2);
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.label-row label {
+  width: 130px;
+  font-weight: bold;
+  color: #12f7d6;
+  font-size: 0.9rem;
+}
+
+.label-row span {
+  font-weight: bold;
+  color: #ffde59; /* gold text */
+}
+
+/* ==== INPUTS ==== */
+input[type="text"],
+input[type="range"] {
+  font-family: monospace;
+  background-color: #262626;
+  border: 1px solid #ff00ff; /* magenta edge */
+  color: #a6ffea;
+  padding: 6px 8px;
+  font-size: 14px;
+  margin-right: 8px;
+  border-radius: 5px;
+  flex: 1;
+  min-width: 160px;
+  box-shadow: 0 0 5px rgba(255, 0, 255, 0.2);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  background-color: #12f7d6;
+}
+
+/* ==== BUTTONS ==== */
+button {
+  padding: 8px 12px;
+  border: 1px solid #1298f7;
+  background: transparent;
+  color: #12baf7;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-radius: 5px;
+  transition: all 0.2s ease;
+  margin: 4px 6px 4px 0;
+}
+
+button:hover:not(:disabled) {
+  background: rgb(127, 159, 203);
+  color: #121212;
+
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==== TRANSMIT BUTTON ==== */
+button.transmit-on {
+  border-color: #7aff00;
+  color: #7aff00;
+  box-shadow: 0 0 6px #7aff00, 0 0 12px rgba(122, 255, 0, 0.3);
+}
+
+/* ==== LOG BOX ==== */
+.log-box {
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #222;
+  border: 1px dashed #ff00ff;
+  padding: 10px;
+  font-size: 12px;
+  margin-top: 12px;
+  color: #ffde59; /* yellow console text */
+  border-radius: 6px;
+  font-family: monospace;
+  box-shadow: inset 0 0 10px rgba(255, 0, 255, 0.15);
+}
+
+.log-box div {
+  margin-bottom: 4px;
+}
+
+/* ==== RESPONSIVE ==== */
+@media (max-width: 768px) {
+  .app-container {
+    padding: 15px;
+  }
+
+  .label-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .label-row label {
+    width: 100%;
+    margin-bottom: 4px;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-container {
+    border-width: 1px;
+    border-radius: 6px;
+  }
+
+  .section {
+    padding: 10px;
+  }
+
+  .log-box {
+    font-size: 11px;
+  }
+}
