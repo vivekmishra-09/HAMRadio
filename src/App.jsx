@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import Peer from "peerjs";
-
 import "./App.css";
 
 export default function App() {
   const logRef = useRef(null);
   const localAudioRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const ringtoneRef = useRef(null);  // 🔔 Ringtone reference
 
   const [peer, setPeer] = useState(null);
   const [myId, setMyId] = useState("...");
@@ -26,9 +26,7 @@ export default function App() {
     }
   };
 
-  // ==========================================
-  //          CHANGE ID FUNCTION
-  // ==========================================
+  // ------------------ CHANGE ID FUNCTION ------------------
   const changeId = () => {
     const newId = prompt("Enter new Radio ID:");
 
@@ -38,8 +36,6 @@ export default function App() {
     }
 
     localStorage.setItem("myRadioId", newId.trim());
-
-    // Reset session & reload
     localStorage.removeItem("tabCount");
     sessionStorage.removeItem("myTabRadioId");
     sessionStorage.removeItem("sessionActive");
@@ -47,17 +43,17 @@ export default function App() {
     window.location.reload();
   };
 
-  // ==========================================
-  //     PERMANENT ID + CLEAN MULTI-TAB FIX
-  // ==========================================
+  // -------------- PERMANENT ID + CLEAN MULTI TAB --------------
   useEffect(() => {
     let baseId = localStorage.getItem("myRadioId");
 
     if (!baseId) {
       let name = prompt("Set your Radio ID (example: vivek_01):");
+
       if (!name || name.trim() === "") {
         name = "radio_" + Math.random().toString(36).substring(2, 10);
       }
+
       localStorage.setItem("myRadioId", name);
       baseId = name;
     }
@@ -100,13 +96,19 @@ export default function App() {
 
     setPeer(p);
 
+    // ---------------- INCOMING CALL -----------------
     p.on("call", (call) => {
       log(`☎️ Incoming call from ${call.peer}`);
 
+      // 🔔 PLAY RINGTONE
+      if (ringtoneRef.current) {
+        ringtoneRef.current.currentTime = 0;
+        ringtoneRef.current.play().catch(() => {});
+      }
+
       try {
         call.answer(localStream || undefined);
-      } catch (e) {
-        log(`⚠️ Error answering call: ${e.message}`);
+      } catch {
         call.answer();
       }
 
@@ -116,9 +118,9 @@ export default function App() {
     return () => p.destroy();
   }, [localStream]);
 
-  // ==========================================
-  //             CALL HANDLER
-  // ==========================================
+  // ---------------------------------------------------------
+  //                  CALL HANDLER
+  // ---------------------------------------------------------
   function attachCallHandlers(call) {
     if (callInstance && callInstance !== call) {
       try {
@@ -129,31 +131,43 @@ export default function App() {
     setCallInstance(call);
 
     call.on("stream", (remoteStream) => {
+
+      // 🔔 STOP RINGTONE ON CONNECT
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
+
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remoteStream;
-        remoteAudioRef.current.play().catch(() => {
-          log("⚠ Click anywhere to enable audio");
-        });
-        log(`🎙 Receiving audio from ${call.peer}`);
+        remoteAudioRef.current.play().catch(() =>
+          log("⚠ Click anywhere to enable audio")
+        );
       }
+
+      log(`🎙 Receiving audio from ${call.peer}`);
     });
 
     call.on("close", () => {
-      log("📴 Call ended by peer");
+
+      // 🔔 STOP RINGTONE ON END
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
+
       if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+
       setCallInstance(null);
+      log("📴 Call ended");
     });
 
     call.on("error", (err) => {
       log(`❌ Call error: ${err.message}`);
     });
-
-    log(`🔗 Call connected with ${call.peer}`);
   }
 
-  // ==========================================
-  //              MIC CONTROLS
-  // ==========================================
+  // ------------------ MIC + TRANSMIT CONTROLS ------------------
   const startMic = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -163,25 +177,25 @@ export default function App() {
         localAudioRef.current.srcObject = stream;
       }
 
-      log("🎤 Microphone ON");
       setMicStarted(true);
-      setTransmit(false);
+      log("🎤 Microphone ON");
     } catch (e) {
-      log(`❌ Mic error: ${e.message}`);
+      log(`❌ Microphone error: ${e.message}`);
     }
   };
 
   const stopMic = () => {
     if (!localStream) return;
     localStream.getAudioTracks().forEach((t) => (t.enabled = false));
-    log("🔇 Microphone muted");
+
     setMicStarted(false);
-    setTransmit(false);
+    log("🔇 Microphone OFF");
   };
 
   const setTransmit = (on) => {
     const state = !!on;
     setTransmitting(state);
+
     if (localStream) {
       localStream.getAudioTracks().forEach((t) => (t.enabled = state));
       log(state ? "📡 TRANSMITTING" : "📥 LISTENING");
@@ -190,16 +204,14 @@ export default function App() {
 
   const toggleTransmit = () => setTransmit(!transmitting);
 
-  // ==========================================
-  //             CALL FUNCTIONS
-  // ==========================================
+  // ------------------ CALL ACTIONS ------------------
   const callFriend = () => {
     if (!peerIdInput.trim()) return alert("Enter friend's ID");
-    if (!peer) return;
 
     log(`📞 Calling ${peerIdInput} ...`);
 
     const call = peer.call(peerIdInput.trim(), localStream || undefined);
+
     if (!call) {
       log("⚠ Call failed");
       return;
@@ -213,19 +225,16 @@ export default function App() {
       try {
         callInstance.close();
       } catch {}
+
       setCallInstance(null);
 
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = null;
-      }
+      if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
 
       log("📴 Call ended");
     }
   };
 
-  // ==========================================
-  //        VOLUME + AUTOPLAY FIX
-  // ==========================================
+  // ------------------ VOLUME + AUTOPLAY FIX ------------------
   useEffect(() => {
     if (remoteAudioRef.current) {
       remoteAudioRef.current.volume = volume;
@@ -244,55 +253,61 @@ export default function App() {
     return () => document.removeEventListener("click", enableAudio);
   }, []);
 
-  // ==========================================
-  //                  UI
-  // ==========================================
+  // ---------------------------------------------------------
+  //                        UI
+  // ---------------------------------------------------------
   return (
     <div className="app-container">
       <h2>Ham Radio — 2-Person P2P</h2>
 
       <div className="section">
-        {/* PERMANENT ID + SET NEW ID BUTTON */}
+        {/* PEER ID + BUTTON */}
         <div style={{ margin: "8px 0", display: "flex", alignItems: "center" }}>
           <label style={{ width: 120 }}>Your Peer ID:</label>
-          <span style={{ 
-            fontWeight: "bold", 
-            color: "#ffeb3b", 
-            marginRight: 10 
-          }}>
+
+          <span
+            style={{
+              fontWeight: "bold",
+              color: "#ffeb3b",
+              marginRight: 10,
+            }}
+          >
             {myId}
           </span>
 
-          {/* SET NEW ID BUTTON */}
-          <button onClick={changeId}>
-            Set New ID
-          </button>
+          <button onClick={changeId}>Set New ID</button>
         </div>
 
-        {/* FRIEND ID INPUT */}
+        {/* FRIEND ID */}
         <div style={{ margin: "8px 0" }}>
-          <label style={{ width: 120 }}>Friend's ID:</label>
+          <label style={{ width: 120 }}>Call ID:</label>
           <input
             value={peerIdInput}
             onChange={(e) => setPeerIdInput(e.target.value)}
-            placeholder="Enter friend's Peer ID"
+            placeholder="Enter Call ID"
           />
           <button onClick={callFriend}>Call</button>
-          <button onClick={hangUp} disabled={!callInstance}>Hang</button>
+          <button onClick={hangUp} disabled={!callInstance}>
+            Hang
+          </button>
         </div>
 
-        {/* MIC CONTROLS */}
+        {/* MIC */}
         <div style={{ margin: "8px 0" }}>
           <label style={{ width: 120 }}>Microphone:</label>
-          <button onClick={startMic} disabled={micStarted}>Start Mic</button>
-          <button onClick={stopMic} disabled={!micStarted}>Stop Mic</button>
+          <button onClick={startMic} disabled={micStarted}>
+            Start Mic
+          </button>
+          <button onClick={stopMic} disabled={!micStarted}>
+            Stop Mic
+          </button>
         </div>
 
         {/* TRANSMIT */}
         <div style={{ margin: "8px 0" }}>
           <label style={{ width: 120 }}>Transmit:</label>
-          <button 
-            onClick={toggleTransmit} 
+          <button
+            onClick={toggleTransmit}
             disabled={!micStarted}
             className={transmitting ? "transmit-on" : ""}
           >
@@ -317,6 +332,13 @@ export default function App() {
 
         <audio ref={localAudioRef} autoPlay muted />
         <audio ref={remoteAudioRef} autoPlay />
+
+        {/* 🔔 RINGTONE AUDIO TAG */}
+        <audio
+          ref={ringtoneRef}
+          src="https://actions.google.com/sounds/v1/alarms/telephone_ring.ogg"
+          preload="auto"
+        />
       </div>
     </div>
   );
