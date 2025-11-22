@@ -26,34 +26,75 @@ export default function App() {
     }
   };
 
+  // ==========================================
+  //          CHANGE ID FUNCTION
+  // ==========================================
+  const changeId = () => {
+    const newId = prompt("Enter new Radio ID:");
+
+    if (!newId || !newId.trim()) {
+      alert("Invalid ID!");
+      return;
+    }
+
+    localStorage.setItem("myRadioId", newId.trim());
+
+    // Reset session & reload
+    localStorage.removeItem("tabCount");
+    sessionStorage.removeItem("myTabRadioId");
+    sessionStorage.removeItem("sessionActive");
+
+    window.location.reload();
+  };
+
+  // ==========================================
+  //     PERMANENT ID + CLEAN MULTI-TAB FIX
+  // ==========================================
   useEffect(() => {
-    const generateShortId = () => {
-      return Math.random().toString(36).substring(2, 8);
-    };
+    let baseId = localStorage.getItem("myRadioId");
 
-    let id = generateShortId();
+    if (!baseId) {
+      let name = prompt("Set your Radio ID (example: vivek_01):");
+      if (!name || name.trim() === "") {
+        name = "radio_" + Math.random().toString(36).substring(2, 10);
+      }
+      localStorage.setItem("myRadioId", name);
+      baseId = name;
+    }
 
-    const p = new Peer(id);
+    let tabId = sessionStorage.getItem("myTabRadioId");
+
+    if (!tabId) {
+      const existingTabs = Number(localStorage.getItem("tabCount") || "0") + 1;
+      localStorage.setItem("tabCount", existingTabs);
+
+      if (existingTabs === 1) {
+        tabId = baseId;
+      } else {
+        tabId = `${baseId}_temp${existingTabs - 1}`;
+      }
+
+      sessionStorage.setItem("myTabRadioId", tabId);
+    }
+
+    const p = new Peer(tabId);
 
     p.on("open", (id) => {
       setMyId(id);
-      log(`🆔 Your Peer ID: ${id} — share this key with your friend`);
+
+      if (id === baseId) {
+        log(`🆔 Permanent Radio ID: ${id}`);
+      } else {
+        log(`⚠️ Secondary Tab — Temporary ID: ${id}`);
+      }
     });
 
     p.on("error", (err) => {
       if (err.type === "unavailable-id") {
-        log("❌ Peer ID taken, generating new ID...");
-        id = generateShortId();
-        p.destroy();
-        setPeer(null);
-        const newPeer = new Peer(id);
-        setPeer(newPeer);
-        newPeer.on("open", (newId) => {
-          setMyId(newId);
-          log(`🆔 Your new Peer ID: ${newId} — share this key with your friend`);
-        });
+        alert("⚠ ID already in use. Choose a new one.");
+        changeId();
       } else {
-        log(`❌ Peer error: ${err.message || err}`);
+        log(`❌ Peer error: ${err.message}`);
       }
     });
 
@@ -61,115 +102,109 @@ export default function App() {
 
     p.on("call", (call) => {
       log(`☎️ Incoming call from ${call.peer}`);
+
       try {
         call.answer(localStream || undefined);
       } catch (e) {
-        log(`⚠️ Could not answer with local stream: ${e.message || e}`);
+        log(`⚠️ Error answering call: ${e.message}`);
         call.answer();
       }
+
       attachCallHandlers(call);
     });
 
-  return () => {
-      p.destroy();
-    };
+    return () => p.destroy();
   }, [localStream]);
 
+  // ==========================================
+  //             CALL HANDLER
+  // ==========================================
   function attachCallHandlers(call) {
     if (callInstance && callInstance !== call) {
       try {
         callInstance.close();
       } catch {}
     }
+
     setCallInstance(call);
 
     call.on("stream", (remoteStream) => {
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remoteStream;
         remoteAudioRef.current.play().catch(() => {
-          log(
-            "⚠️ Click anywhere on the page if you do not hear audio (browser autoplay policy)"
-          );
+          log("⚠ Click anywhere to enable audio");
         });
         log(`🎙 Receiving audio from ${call.peer}`);
       }
     });
 
     call.on("close", () => {
-      log("📴 Peer ended call");
+      log("📴 Call ended by peer");
       if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
       setCallInstance(null);
     });
 
     call.on("error", (err) => {
-      log(`❌ Call error: ${err?.message || err}`);
+      log(`❌ Call error: ${err.message}`);
     });
 
     log(`🔗 Call connected with ${call.peer}`);
   }
 
+  // ==========================================
+  //              MIC CONTROLS
+  // ==========================================
   const startMic = async () => {
-    if (localStream) {
-      localStream.getAudioTracks().forEach((track) => (track.enabled = true));
-      log("🔊 Microphone started (unmuted)");
-      setMicStarted(true);
-      setTransmit(false);
-      return;
-    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setLocalStream(stream);
+
       if (localAudioRef.current) {
         localAudioRef.current.srcObject = stream;
-        localAudioRef.current.play().catch(() => {});
       }
-      log("🔊 Microphone started");
+
+      log("🎤 Microphone ON");
       setMicStarted(true);
       setTransmit(false);
     } catch (e) {
-      log(`❌ Microphone access denied or error: ${e.message || e}`);
+      log(`❌ Mic error: ${e.message}`);
     }
   };
 
   const stopMic = () => {
     if (!localStream) return;
-    localStream.getAudioTracks().forEach((track) => (track.enabled = false));
-    log("🔇 Microphone stopped (muted)");
+    localStream.getAudioTracks().forEach((t) => (t.enabled = false));
+    log("🔇 Microphone muted");
     setMicStarted(false);
     setTransmit(false);
   };
 
   const setTransmit = (on) => {
-    const transmittingOn = !!on;
-    setTransmitting(transmittingOn);
+    const state = !!on;
+    setTransmitting(state);
     if (localStream) {
-      localStream.getAudioTracks().forEach((t) => (t.enabled = transmittingOn));
-      log(
-        transmittingOn
-          ? "📡 You are TRANSMITTING"
-          : "📥 You are LISTENING (transmit OFF)"
-      );
-    } else {
-      setTransmitting(false);
-      log("❌ No mic available; transmit OFF");
+      localStream.getAudioTracks().forEach((t) => (t.enabled = state));
+      log(state ? "📡 TRANSMITTING" : "📥 LISTENING");
     }
   };
 
-  const toggleTransmit = () => {
-    setTransmit(!transmitting);
-  };
+  const toggleTransmit = () => setTransmit(!transmitting);
 
+  // ==========================================
+  //             CALL FUNCTIONS
+  // ==========================================
   const callFriend = () => {
-    if (!peerIdInput.trim()) return alert("Enter friend ID (the key they shared)");
+    if (!peerIdInput.trim()) return alert("Enter friend's ID");
     if (!peer) return;
 
     log(`📞 Calling ${peerIdInput} ...`);
-    const streamToSend = localStream || undefined;
-    const call = peer.call(peerIdInput.trim(), streamToSend);
+
+    const call = peer.call(peerIdInput.trim(), localStream || undefined);
     if (!call) {
-      log("⚠️ Call failed (no connection)");
+      log("⚠ Call failed");
       return;
     }
+
     attachCallHandlers(call);
   };
 
@@ -179,11 +214,18 @@ export default function App() {
         callInstance.close();
       } catch {}
       setCallInstance(null);
-      if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
+      }
+
       log("📴 Call ended");
     }
   };
 
+  // ==========================================
+  //        VOLUME + AUTOPLAY FIX
+  // ==========================================
   useEffect(() => {
     if (remoteAudioRef.current) {
       remoteAudioRef.current.volume = volume;
@@ -191,67 +233,76 @@ export default function App() {
   }, [volume]);
 
   useEffect(() => {
-    function allowAudioPlayback() {
+    const enableAudio = () => {
       if (remoteAudioRef.current) {
         remoteAudioRef.current.play().catch(() => {});
       }
-      document.removeEventListener("click", allowAudioPlayback);
-    }
-    document.addEventListener("click", allowAudioPlayback);
-    return () => document.removeEventListener("click", allowAudioPlayback);
+      document.removeEventListener("click", enableAudio);
+    };
+
+    document.addEventListener("click", enableAudio);
+    return () => document.removeEventListener("click", enableAudio);
   }, []);
 
+  // ==========================================
+  //                  UI
+  // ==========================================
   return (
     <div className="app-container">
       <h2>Ham Radio — 2-Person P2P</h2>
-  
+
       <div className="section">
-        <div style={{ margin: "8px 0" }}>
-          <label style={{ display: "inline-block", width: 110 }}>Your Peer ID:</label>
-          <span style={{ fontWeight: "bold", color: "#ffeb3b", marginLeft: 6 }}>
+        {/* PERMANENT ID + SET NEW ID BUTTON */}
+        <div style={{ margin: "8px 0", display: "flex", alignItems: "center" }}>
+          <label style={{ width: 120 }}>Your Peer ID:</label>
+          <span style={{ 
+            fontWeight: "bold", 
+            color: "#ffeb3b", 
+            marginRight: 10 
+          }}>
             {myId}
           </span>
+
+          {/* SET NEW ID BUTTON */}
+          <button onClick={changeId}>
+            Set New ID
+          </button>
         </div>
-  
+
+        {/* FRIEND ID INPUT */}
         <div style={{ margin: "8px 0" }}>
-          <label style={{ display: "inline-block", width: 110 }}>Friend's ID:</label>
+          <label style={{ width: 120 }}>Friend's ID:</label>
           <input
             value={peerIdInput}
             onChange={(e) => setPeerIdInput(e.target.value)}
             placeholder="Enter friend's Peer ID"
           />
-          <button onClick={callFriend}>Call Friend</button>
-          <button onClick={hangUp} disabled={!callInstance}>
-            Hang Up
-          </button>
+          <button onClick={callFriend}>Call</button>
+          <button onClick={hangUp} disabled={!callInstance}>Hang</button>
         </div>
-  
+
+        {/* MIC CONTROLS */}
         <div style={{ margin: "8px 0" }}>
-          <label style={{ display: "inline-block", width: 110 }}>Microphone:</label>
-          <button onClick={startMic} disabled={micStarted}>
-            Start Mic
-          </button>
-          <button onClick={stopMic} disabled={!micStarted}>
-            Stop Mic
-          </button>
+          <label style={{ width: 120 }}>Microphone:</label>
+          <button onClick={startMic} disabled={micStarted}>Start Mic</button>
+          <button onClick={stopMic} disabled={!micStarted}>Stop Mic</button>
         </div>
-  
+
+        {/* TRANSMIT */}
         <div style={{ margin: "8px 0" }}>
-          <label style={{ display: "inline-block", width: 110 }}>Transmit:</label>
-          <button
-            className={transmitting ? "transmit-on" : ""}
-            onClick={toggleTransmit}
+          <label style={{ width: 120 }}>Transmit:</label>
+          <button 
+            onClick={toggleTransmit} 
             disabled={!micStarted}
+            className={transmitting ? "transmit-on" : ""}
           >
             {transmitting ? "TRANSMITTING" : "OFF"}
           </button>
-          <small style={{ marginLeft: 10 }}>
-            (Tap to toggle transmit. When OFF, you only listen.)
-          </small>
         </div>
-  
+
+        {/* VOLUME */}
         <div style={{ margin: "8px 0" }}>
-          <label style={{ display: "inline-block", width: 110 }}>Volume:</label>
+          <label style={{ width: 120 }}>Volume:</label>
           <input
             type="range"
             min="0"
@@ -261,12 +312,12 @@ export default function App() {
             onChange={(e) => setVolume(parseFloat(e.target.value))}
           />
         </div>
-  
+
         <div ref={logRef} className="log-box"></div>
-  
+
         <audio ref={localAudioRef} autoPlay muted />
         <audio ref={remoteAudioRef} autoPlay />
       </div>
     </div>
-  );  
+  );
 }
